@@ -1,1 +1,0 @@
-# techgati-R2
