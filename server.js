@@ -90,7 +90,7 @@ try { db.exec("ALTER TABLE participants ADD COLUMN submitted_at TEXT DEFAULT '';
 try { db.exec("ALTER TABLE participants ADD COLUMN exam_started_at TEXT DEFAULT '';"); } catch (e) {}
 
 const initConfig = db.prepare('INSERT OR IGNORE INTO config (key, value) VALUES (?, ?)');
-db.prepare('INSERT OR REPLACE INTO config (key, value) VALUES (?, ?)').run('form_url', 'https://forms.gle/oXhQFgwhr9WTFsQV7');
+db.prepare('INSERT OR REPLACE INTO config (key, value) VALUES (?, ?)').run('form_url', 'https://forms.gle/V18xxxgdPbBP2uN4A');
 initConfig.run('quiz_active', 'false');
 initConfig.run('quiz_started_at', '');
 
@@ -233,21 +233,27 @@ app.post('/api/register', (req, res) => {
 
     const id = generateId();
     const now = new Date().toISOString();
-    const ip = req.ip || req.socket?.remoteAddress || '';
+    const cleanName = name ? String(name).trim() : '';
+    const cleanRoll = roll ? String(roll).trim() : '';
+    const cleanSeat = seat ? String(seat).trim() : '';
+    const ip = req.ip || (req.socket && req.socket.remoteAddress) || '';
 
-    stmts.registerParticipant.run(id, name.trim(), roll.trim(), seat?.trim() || '', now, now, ip);
+    stmts.registerParticipant.run(id, cleanName, cleanRoll, cleanSeat, now, now, ip);
 
-    const participant = { id, name: name.trim(), roll: roll.trim(), seat: seat?.trim() || '' };
+    const participant = { id, name: cleanName, roll: cleanRoll, seat: cleanSeat };
 
     io.to('admin').emit('participant_registered', participant);
     io.to('admin').emit('participants_updated', getParticipantsData());
 
-    console.log(`[Register] ${name} (${roll}) — ID: ${id}`);
+    console.log(`[Register] ${cleanName} (${cleanRoll}) — ID: ${id}`);
+
+    const configRow = stmts.getConfig.get('form_url');
+    const formUrl = (configRow && configRow.value) ? configRow.value : '';
 
     res.json({
       success: true,
       participant,
-      formUrl: stmts.getConfig.get('form_url')?.value || ''
+      formUrl: formUrl
     });
   } catch (err) {
     console.error('[Register] Error:', err);
@@ -419,9 +425,12 @@ app.get('/api/violations', (req, res) => {
 
 app.get('/api/config', (req, res) => {
   try {
-    const formUrl = stmts.getConfig.get('form_url')?.value || '';
-    const quizActive = stmts.getConfig.get('quiz_active')?.value === 'true';
-    const quizStartedAt = stmts.getConfig.get('quiz_started_at')?.value || '';
+    const formRow = stmts.getConfig.get('form_url');
+    const formUrl = (formRow && formRow.value) ? formRow.value : '';
+    const activeRow = stmts.getConfig.get('quiz_active');
+    const quizActive = (activeRow && activeRow.value === 'true');
+    const startedRow = stmts.getConfig.get('quiz_started_at');
+    const quizStartedAt = (startedRow && startedRow.value) ? startedRow.value : '';
     res.json({ formUrl, quizActive, quizStartedAt });
   } catch (err) {
     console.error('[Config] Error:', err);
